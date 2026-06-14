@@ -3,7 +3,15 @@ import pytest
 from agents.critic_agent import critique_hypotheses
 from agents.gap_agent import find_research_gaps
 from agents.hypothesis_agent import generate_hypotheses
-from utils.llm import LLMService, LLMServiceError, format_gemini_error, get_gemini_call_counts, record_gemini_call, reset_gemini_call_counts
+from utils.llm import (
+    GEMINI_QUOTA_EXCEEDED_MESSAGE,
+    LLMService,
+    LLMServiceError,
+    format_gemini_error,
+    get_gemini_call_counts,
+    record_gemini_call,
+    reset_gemini_call_counts,
+)
 from utils.summarizer import summarize_paper
 
 
@@ -56,11 +64,12 @@ def test_gemini_call_tracking_records_each_stage():
 def test_format_gemini_error_returns_user_friendly_message():
     message = format_gemini_error(RuntimeError("429 quota exceeded for model gemini-2.5-flash"))
 
-    assert "quota" in message.lower() or "temporary" in message.lower()
-    assert "Gemini" in message
+    assert message == GEMINI_QUOTA_EXCEEDED_MESSAGE
 
 
 def test_llm_service_wraps_connect_timeout_as_retryable_error(monkeypatch):
+    reset_gemini_call_counts()
+
     class ConnectTimeout(Exception):
         pass
 
@@ -88,6 +97,8 @@ def test_llm_service_wraps_connect_timeout_as_retryable_error(monkeypatch):
 
 
 def test_llm_service_switches_to_fallback_model_after_retryable_failure(monkeypatch):
+    reset_gemini_call_counts()
+
     class ServerUnavailable(Exception):
         pass
 
@@ -112,6 +123,41 @@ def test_llm_service_switches_to_fallback_model_after_retryable_failure(monkeypa
 
     assert result == "fallback response"
     assert calls == ["gemini-primary", "gemini-primary", "gemini-fallback"]
+
+
+def test_llm_service_does_not_retry_or_wait_on_gemini_quota(monkeypatch):
+    reset_gemini_call_counts()
+
+    service = LLMService.__new__(LLMService)
+    service.model_name = "gemini-primary"
+    service.model_names = ["gemini-primary", "gemini-fallback"]
+    service.max_retries = 3
+    service.retry_backoff = 100
+
+    calls = []
+    sleeps = []
+
+    def quota_exhausted(prompt, model_name):
+        calls.append(model_name)
+        raise RuntimeError("429 RESOURCE_EXHAUSTED. Retry in 30s")
+
+    monkeypatch.setattr(service, "_request_once", quota_exhausted)
+    monkeypatch.setattr(service, "_sleep_before_retry", lambda attempt, error: sleeps.append((attempt, error)))
+
+    with pytest.raises(LLMServiceError) as exc_info:
+        service.generate_response("Summarize this paper.")
+
+    assert calls == ["gemini-primary"]
+    assert sleeps == []
+    assert exc_info.value.message == GEMINI_QUOTA_EXCEEDED_MESSAGE
+    assert exc_info.value.retryable is False
+    assert exc_info.value.retry_after is None
+
+    calls.clear()
+    with pytest.raises(LLMServiceError):
+        service.generate_response("Try another stage.")
+
+    assert calls == []
 
 
 def test_find_research_gaps_fallback_returns_estimated_gaps(monkeypatch):

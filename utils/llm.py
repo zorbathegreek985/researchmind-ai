@@ -12,6 +12,8 @@ dotenv.load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+GEMINI_QUOTA_EXCEEDED_MESSAGE = "⚠️ Gemini quota exceeded. Please try again later."
+
 _GEMINI_CALL_COUNTS = {
     "summarization": 0,
     "gap_analysis": 0,
@@ -27,6 +29,7 @@ _GEMINI_RUNTIME_STATUS = {
     "attempted_models": [],
     "failed_models": [],
     "last_error": None,
+    "quota_exceeded": False,
 }
 
 
@@ -69,6 +72,7 @@ def reset_gemini_runtime_status() -> dict:
         "attempted_models": [],
         "failed_models": [],
         "last_error": None,
+        "quota_exceeded": False,
     }
     return _GEMINI_RUNTIME_STATUS
 
@@ -103,6 +107,8 @@ def record_gemini_model_error(model_name: str, service_error: "LLMServiceError")
     if model_name not in failed_models:
         failed_models.append(model_name)
     _GEMINI_RUNTIME_STATUS["last_error"] = service_error.to_dict()["error"]
+    if service_error.code == "GEMINI_RATE_LIMITED":
+        _GEMINI_RUNTIME_STATUS["quota_exceeded"] = True
     return get_gemini_runtime_status()
 
 
@@ -163,7 +169,7 @@ def format_gemini_error(exc: Exception) -> str:
     lowered = text.lower()
 
     if "quota" in lowered or "resource_exhausted" in lowered or "rate limit" in lowered or "429" in text:
-        return "Gemini quota or rate limits were reached. Please wait a moment and try again."
+        return GEMINI_QUOTA_EXCEEDED_MESSAGE
 
     if "timeout" in lowered or "timed out" in lowered or "deadline" in lowered or "408" in text:
         return "The Gemini request timed out. Please try again with a simpler prompt or a short pause."
@@ -370,9 +376,10 @@ class LLMService:
         return None
 
     @staticmethod
-    def _is_quota_or_retryable(exc: Exception) -> bool:
+    def _is_quota_exhausted(exc: Exception) -> bool:
+        status_code = LLMService._extract_status_code(exc)
         text = str(exc).lower()
-        return any(token in text for token in ("429", "quota", "resource_exhausted", "rate limit", "retry"))
+        return status_code == 429 or any(token in text for token in ("quota", "resource_exhausted", "rate limit"))
 
     @staticmethod
     def _is_network_or_timeout(exc: Exception) -> bool:
@@ -414,13 +421,12 @@ class LLMService:
         status_code = self._extract_status_code(exc)
         retry_after = self._extract_retry_after(exc)
 
-        if self._is_quota_or_retryable(exc):
+        if self._is_quota_exhausted(exc):
             return LLMServiceError(
-                "Gemini quota or rate limits were reached.",
+                GEMINI_QUOTA_EXCEEDED_MESSAGE,
                 code="GEMINI_RATE_LIMITED",
                 status_code=status_code,
-                retryable=True,
-                retry_after=retry_after,
+                retryable=False,
                 raw_error=exc,
             )
 
@@ -477,6 +483,14 @@ class LLMService:
     def generate_response(self, prompt: str, stage: str | None = None) -> str:
         if not isinstance(prompt, str) or not prompt.strip():
             raise LLMServiceError("Prompt must be a non-empty string.", code="INVALID_PROMPT")
+
+        if _GEMINI_RUNTIME_STATUS.get("quota_exceeded"):
+            raise LLMServiceError(
+                GEMINI_QUOTA_EXCEEDED_MESSAGE,
+                code="GEMINI_RATE_LIMITED",
+                status_code=429,
+                retryable=False,
+            )
 
         if stage:
             record_gemini_call(stage)

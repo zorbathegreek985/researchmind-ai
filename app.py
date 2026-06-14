@@ -7,6 +7,7 @@ from agents.critic_agent import critique_hypotheses
 from agents.gap_agent import find_research_gaps
 from agents.hypothesis_agent import generate_hypotheses
 from utils.llm import (
+    GEMINI_QUOTA_EXCEEDED_MESSAGE,
     format_gemini_error,
     get_gemini_call_counts,
     get_gemini_diagnostic,
@@ -427,8 +428,13 @@ if run_workflow:
         st.info("Using cached results for this topic. Gemini calls were not repeated for this run.")
 
     runtime_status = get_gemini_runtime_status()
-    if runtime_status.get("request_failed") and not runtime_status.get("last_model"):
-        st.error("🔴 Gemini service temporarily unavailable.\nPlease try again in a few minutes.")
+    gemini_unavailable = runtime_status.get("request_failed") and not runtime_status.get("last_model")
+    if runtime_status.get("quota_exceeded") or gemini_unavailable:
+        last_error = runtime_status.get("last_error") or {}
+        error_message = last_error.get("message") if isinstance(last_error, dict) else None
+        if isinstance(last_error, dict) and last_error.get("code") == "GEMINI_RATE_LIMITED":
+            error_message = GEMINI_QUOTA_EXCEEDED_MESSAGE
+        st.error(error_message or "Gemini service temporarily unavailable. Please try again in a few minutes.")
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Papers found", len(result.get("papers", [])))
