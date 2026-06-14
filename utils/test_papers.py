@@ -7,16 +7,22 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from utils.paper_search import search_papers
 
-papers = search_papers("Artificial Intelligence")
 
-for paper in papers:
-    print("\nTITLE:")
-    print(paper["title"])
+def main():
+    papers = search_papers("Artificial Intelligence")
 
-    print("\nURL:")
-    print(paper["url"])
+    for paper in papers:
+        print("\nTITLE:")
+        print(paper["title"])
 
-    print("\nSUMMARY:")
-    print(paper["summary"][:300])
+        print("\nURL:")
+        print(paper["url"])
 
-    print("\n" + "="*80)
+        print("\nSUMMARY:")
+        print(paper["summary"][:300])
+
+        print("\n" + "=" * 80)
+
+
+if __name__ == "__main__":
+    main()
