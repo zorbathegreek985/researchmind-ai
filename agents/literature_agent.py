@@ -47,7 +47,10 @@ class LiteratureAgent:
 
         try:
             prompt = literature_review_prompt(topic.strip())
-            response_text = self.llm_service.generate_response(prompt)
+            response_text = self.llm_service.generate_response(
+    prompt,
+    stage="literature_review"
+)
             data = json.loads(response_text)
         except LLMServiceError as exc:
             raise LiteratureAgentError("Failed to generate literature review using Azure OpenAI.") from exc
