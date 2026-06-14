@@ -1,4 +1,4 @@
-from utils.llm import LLMService, LLMServiceError, build_fallback_gaps, format_gemini_error
+from utils.llm import LLMService, LLMServiceError, build_fallback_gaps, print_gemini_exception_diagnostics
 
 
 def find_research_gaps(summaries):
@@ -24,9 +24,9 @@ Give the answer in bullet points.
         return llm.generate_response(prompt, stage="gap_analysis")
 
     except LLMServiceError as e:
-        print(f"Gap analysis failed: {e}")
+        print_gemini_exception_diagnostics(e, stage="gap_analysis", service_error=e)
         return build_fallback_gaps(summaries)
 
     except Exception as e:
-        print(f"Unexpected gap analysis error: {repr(e)}")
+        print_gemini_exception_diagnostics(e, stage="gap_analysis")
         raise

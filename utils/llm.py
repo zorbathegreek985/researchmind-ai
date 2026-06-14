@@ -22,7 +22,11 @@ _GEMINI_CALL_COUNTS = {
 _GEMINI_RUNTIME_STATUS = {
     "last_model": None,
     "fallback_model_used": False,
+    "fallback_model_attempted": False,
     "request_failed": False,
+    "attempted_models": [],
+    "failed_models": [],
+    "last_error": None,
 }
 
 
@@ -60,7 +64,11 @@ def reset_gemini_runtime_status() -> dict:
     _GEMINI_RUNTIME_STATUS = {
         "last_model": None,
         "fallback_model_used": False,
+        "fallback_model_attempted": False,
         "request_failed": False,
+        "attempted_models": [],
+        "failed_models": [],
+        "last_error": None,
     }
     return _GEMINI_RUNTIME_STATUS
 
@@ -79,9 +87,61 @@ def record_gemini_model_failure() -> dict:
     return get_gemini_runtime_status()
 
 
+def record_gemini_model_attempt(model_name: str, primary_model: str | None = None) -> dict:
+    """Record that a Gemini model was attempted during this workflow."""
+    attempted_models = _GEMINI_RUNTIME_STATUS.setdefault("attempted_models", [])
+    if model_name not in attempted_models:
+        attempted_models.append(model_name)
+    if primary_model and model_name != primary_model:
+        _GEMINI_RUNTIME_STATUS["fallback_model_attempted"] = True
+    return get_gemini_runtime_status()
+
+
+def record_gemini_model_error(model_name: str, service_error: "LLMServiceError") -> dict:
+    """Record the latest failed Gemini model and diagnostic summary."""
+    failed_models = _GEMINI_RUNTIME_STATUS.setdefault("failed_models", [])
+    if model_name not in failed_models:
+        failed_models.append(model_name)
+    _GEMINI_RUNTIME_STATUS["last_error"] = service_error.to_dict()["error"]
+    return get_gemini_runtime_status()
+
+
 def get_gemini_runtime_status() -> dict:
     """Return current Gemini model health indicators."""
     return dict(_GEMINI_RUNTIME_STATUS)
+
+
+def print_gemini_exception_diagnostics(
+    exc: Exception,
+    *,
+    model_name: str | None = None,
+    attempt: int | None = None,
+    max_attempts: int | None = None,
+    stage: str | None = None,
+    service_error: "LLMServiceError | None" = None,
+) -> None:
+    """Print detailed Gemini diagnostics for terminal debugging."""
+    raw_error = service_error.raw_error if service_error and service_error.raw_error else exc
+
+    print("\n========== GEMINI ERROR ==========")
+    if stage:
+        print("STAGE:", stage)
+    if model_name:
+        print("MODEL:", model_name)
+    if attempt is not None:
+        attempt_text = str(attempt)
+        if max_attempts is not None:
+            attempt_text = f"{attempt_text}/{max_attempts}"
+        print("ATTEMPT:", attempt_text)
+    if service_error:
+        print("SERVICE_CODE:", service_error.code)
+        print("STATUS_CODE:", service_error.status_code)
+        print("RETRYABLE:", service_error.retryable)
+        print("RETRY_AFTER:", service_error.retry_after)
+    print("TYPE:", type(raw_error))
+    print("REPR:", repr(raw_error))
+    print("TEXT:", str(raw_error))
+    print("==================================\n")
 
 
 def get_gemini_diagnostic() -> dict:
@@ -425,6 +485,7 @@ class LLMService:
         model_names = getattr(self, "model_names", [self.model_name])
 
         for model_index, model_name in enumerate(model_names):
+            record_gemini_model_attempt(model_name, self.model_name)
             for attempt in range(self.max_retries + 1):
                 try:
                     logger.info("Calling Gemini model", extra={"attempt": attempt + 1, "model": model_name})
@@ -436,8 +497,24 @@ class LLMService:
                 except Exception as exc:
                     record_gemini_model_failure()
                     last_error = self._to_service_error(exc)
+                    record_gemini_model_error(model_name, last_error)
+                    print_gemini_exception_diagnostics(
+                        exc,
+                        model_name=model_name,
+                        attempt=attempt + 1,
+                        max_attempts=self.max_retries + 1,
+                        stage=stage,
+                        service_error=last_error,
+                    )
                     logger.warning(
-                        "Gemini request failed",
+                        "Gemini request failed | model=%s | attempt=%s/%s | code=%s | status=%s | retryable=%s | error=%s",
+                        model_name,
+                        attempt + 1,
+                        self.max_retries + 1,
+                        last_error.code,
+                        last_error.status_code,
+                        last_error.retryable,
+                        str(last_error.raw_error or exc),
                         extra={
                             "attempt": attempt + 1,
                             "max_attempts": self.max_retries + 1,
@@ -460,7 +537,11 @@ class LLMService:
                     if model_index < len(model_names) - 1:
                         next_model = model_names[model_index + 1]
                         logger.warning(
-                            "Gemini model retries exhausted; switching fallback model",
+                            "Gemini model retries exhausted; switching fallback model | failed_model=%s | next_model=%s | code=%s | status=%s",
+                            model_name,
+                            next_model,
+                            last_error.code,
+                            last_error.status_code,
                             extra={
                                 "failed_model": model_name,
                                 "next_model": next_model,

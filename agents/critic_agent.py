@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any, Dict, List
 
-from utils.llm import LLMService, LLMServiceError
+from utils.llm import LLMService, LLMServiceError, print_gemini_exception_diagnostics
 
 
 def _extract_json(text: str) -> Dict[str, Any]:
@@ -100,12 +100,12 @@ Each critique should contain:
             if normalized:
                 return normalized
         except LLMServiceError as e:
-            print(f"Critique generation failed: {e}")
+            print_gemini_exception_diagnostics(e, stage="critique", service_error=e)
 
         except (ValueError, TypeError, json.JSONDecodeError) as e:
             print(f"Critique parsing failed: {repr(e)}")
 
         except Exception as e:
-            print(f"Unexpected critique error: {repr(e)}")
+            print_gemini_exception_diagnostics(e, stage="critique")
 
     return _fallback_critiques(topic.strip(), hypotheses if isinstance(hypotheses, list) else [])

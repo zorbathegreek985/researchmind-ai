@@ -1,4 +1,4 @@
-from utils.llm import LLMService, LLMServiceError, build_fallback_summary
+from utils.llm import LLMService, LLMServiceError, build_fallback_summary, print_gemini_exception_diagnostics
 
 def summarize_paper(title, abstract):
     prompt = f"""
@@ -23,9 +23,9 @@ Keep the summary simple.
         return llm.generate_response(prompt, stage="summarization")
 
     except LLMServiceError as e:
-        print(f"Summarization failed: {e}")
+        print_gemini_exception_diagnostics(e, stage="summarization", service_error=e)
         return build_fallback_summary(title, abstract)
 
     except Exception as e:
-        print(f"Unexpected summarization error: {repr(e)}")
+        print_gemini_exception_diagnostics(e, stage="summarization")
         raise

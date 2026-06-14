@@ -11,3 +11,7 @@ __pycache__/
 reports/
 data/
 assets/
+!assets/
+assets/*
+!assets/screenshots/
+!assets/screenshots/.gitkeep

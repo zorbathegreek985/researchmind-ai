@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Optional
 
-from utils.llm import LLMService, LLMServiceError
+from utils.llm import LLMService, LLMServiceError, print_gemini_exception_diagnostics
 from utils.prompts import literature_review_prompt
 
 
@@ -53,7 +53,8 @@ class LiteratureAgent:
 )
             data = json.loads(response_text)
         except LLMServiceError as exc:
-            raise LiteratureAgentError("Failed to generate literature review using Azure OpenAI.") from exc
+            print_gemini_exception_diagnostics(exc, stage="literature_review", service_error=exc)
+            raise LiteratureAgentError("Failed to generate literature review using Gemini.") from exc
         except json.JSONDecodeError as exc:
             raise LiteratureAgentError("The model response was not valid JSON.") from exc
 

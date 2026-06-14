@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any, Dict, List
 
-from utils.llm import LLMService, LLMServiceError
+from utils.llm import LLMService, LLMServiceError, print_gemini_exception_diagnostics
 from utils.prompts import hypothesis_generation_prompt
 
 
@@ -97,12 +97,12 @@ def generate_hypotheses(topic: str, gaps: str, force_fallback: bool = False) -> 
             if normalized:
                 return normalized
         except LLMServiceError as e:
-            print(f"Hypothesis generation failed: {e}")
+            print_gemini_exception_diagnostics(e, stage="hypothesis", service_error=e)
 
         except (ValueError, TypeError, json.JSONDecodeError) as e:
             print(f"Hypothesis parsing failed: {repr(e)}")
 
         except Exception as e:
-            print(f"Unexpected hypothesis error: {repr(e)}")
+            print_gemini_exception_diagnostics(e, stage="hypothesis")
 
     return _fallback_hypotheses(topic.strip(), gaps)

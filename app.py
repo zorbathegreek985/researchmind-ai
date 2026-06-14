@@ -426,6 +426,10 @@ if run_workflow:
     if result.get("cache_hit"):
         st.info("Using cached results for this topic. Gemini calls were not repeated for this run.")
 
+    runtime_status = get_gemini_runtime_status()
+    if runtime_status.get("request_failed") and not runtime_status.get("last_model"):
+        st.error("🔴 Gemini service temporarily unavailable.\nPlease try again in a few minutes.")
+
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Papers found", len(result.get("papers", [])))
     col2.metric("Summaries generated", len(result.get("papers", [])))

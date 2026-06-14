@@ -63,6 +63,28 @@ Open the local Streamlit URL, enter a research topic, and click **Run research w
 4. Review the **Final Research Brief** synthesis.
 5. Download the Markdown or TXT report for submission notes.
 
+## Screenshots
+
+### Home Screen
+
+![Home Screen](assets/screenshots/home.png)
+
+### Research Papers
+
+![Research Papers](assets/screenshots/papers_found.png)
+
+### Research Gaps
+
+![Research Gaps](assets/screenshots/research_gaps.png)
+
+### Hypothesis Generation
+
+![Hypothesis Generation](assets/screenshots/hypotheses.png)
+
+### Final Research Brief
+
+![Final Research Brief](assets/screenshots/final_research_brief.png)
+
 ## Verification
 
 Run the automated test suite before presenting:
