@@ -1,0 +1,10 @@
+# ResearchMind AI dependencies
+
+streamlit
+openai
+python-dotenv
+pydantic
+requests
+azure-identity
+azure-ai-projects
+google-generativeai
