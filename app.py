@@ -1,3 +1,4 @@
+import html as html_lib
 import re
 
 import streamlit as st
@@ -16,7 +17,7 @@ from utils.paper_search import search_papers
 from utils.summarizer import summarize_paper
 
 
-st.set_page_config(page_title="ResearchMind AI", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="ResearchMind AI", layout="wide")
 
 st.markdown(
     """
@@ -171,7 +172,7 @@ st.markdown(
 )
 
 st.caption(
-    "Startup diagnostic — model: "
+    "Startup diagnostic - model: "
     f"{startup_diag['model_name']} | api key loaded: {'yes' if startup_diag['api_key_loaded'] else 'no'} "
     f"| key suffix: {startup_diag['api_key_suffix'] or 'n/a'}"
 )
@@ -248,12 +249,12 @@ def _build_final_research_brief(result: dict) -> dict:
 def _derive_model_status(stats: dict) -> dict:
     runtime_status = get_gemini_runtime_status()
     if runtime_status.get("fallback_model_used"):
-        return {"label": "🟡 Fallback Model Active", "class": "model-fallback", "model": runtime_status.get("last_model")}
+        return {"label": "[Fallback] Gemini fallback active", "class": "model-fallback", "model": runtime_status.get("last_model")}
     if runtime_status.get("last_model"):
-        return {"label": "🟢 Gemini Active", "class": "model-active", "model": runtime_status.get("last_model")}
+        return {"label": "[Active] Gemini active", "class": "model-active", "model": runtime_status.get("last_model")}
     if stats.get("total", 0) > 0 or runtime_status.get("request_failed"):
-        return {"label": "🔴 Gemini Unavailable", "class": "model-unavailable", "model": None}
-    return {"label": "🔴 Gemini Unavailable", "class": "model-unavailable", "model": None}
+        return {"label": "[Unavailable] Gemini unavailable", "class": "model-unavailable", "model": None}
+    return {"label": "[Unavailable] Gemini unavailable", "class": "model-unavailable", "model": None}
 
 
 def _render_final_research_brief(brief: dict) -> None:
@@ -267,10 +268,10 @@ def _render_final_research_brief(brief: dict) -> None:
     html = ["<div class='brief-grid'>"]
     for title, items in sections:
         html.append("<div class='brief-panel'>")
-        html.append(f"<h4>{title}</h4>")
+        html.append(f"<h4>{html_lib.escape(title)}</h4>")
         html.append("<ul>")
         for item in items[:3]:
-            html.append(f"<li>{item}</li>")
+            html.append(f"<li>{html_lib.escape(str(item))}</li>")
         html.append("</ul></div>")
     html.append("</div>")
     st.markdown("".join(html), unsafe_allow_html=True)
@@ -343,7 +344,7 @@ def run_mvp(topic: str):
         cached["cache_hit"] = True
         cached["gemini_stats"] = get_gemini_call_counts()
         cached.setdefault("final_brief", _build_final_research_brief(cached))
-        cached.setdefault("model_status", {"label": "🟢 Gemini Active", "class": "model-active", "model": startup_diag["model_name"]})
+        cached.setdefault("model_status", {"label": "[Cached] Previous model result", "class": "model-active", "model": startup_diag["model_name"]})
         return cached
 
     reset_gemini_call_counts()
@@ -436,13 +437,15 @@ if run_workflow:
     model_status = result.get("model_status", {})
     model_detail = f" ({model_status.get('model')})" if model_status.get("model") else ""
     st.markdown(
-        f"<div class='model-chip {model_status.get('class', 'model-unavailable')}'>{model_status.get('label', '🔴 Gemini Unavailable')}{model_detail}</div>",
+        f"<div class='model-chip {model_status.get('class', 'model-unavailable')}'>{model_status.get('label', '[Unavailable] Gemini unavailable')}{model_detail}</div>",
         unsafe_allow_html=True,
     )
     for item in result.get("workflow_status", []):
         status_class = "status-success" if item["status"] == "success" else "status-warning" if item["status"] == "warning" else "status-failed"
-        icon = "✅" if item["status"] == "success" else "⚠️" if item["status"] == "warning" else "❌"
-        st.markdown(f"<div style='margin-bottom: 0.35rem;'><span class='status-chip {status_class}'>{icon} {item['agent']}</span> {item['details']}</div>", unsafe_allow_html=True)
+        icon = "OK" if item["status"] == "success" else "WARN" if item["status"] == "warning" else "FAIL"
+        agent = html_lib.escape(str(item["agent"]))
+        details = html_lib.escape(str(item["details"]))
+        st.markdown(f"<div style='margin-bottom: 0.35rem;'><span class='status-chip {status_class}'>{icon} {agent}</span> {details}</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)

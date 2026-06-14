@@ -39,9 +39,13 @@ pip install -r requirements.txt
 GEMINI_API_KEY=your_api_key_here
 GEMINI_MODEL=gemini-2.5-flash
 GEMINI_FALLBACK_MODELS=gemini-2.0-flash,gemini-2.0-flash-lite
+GEMINI_TIMEOUT_SECONDS=45
+GEMINI_MAX_RETRIES=3
+GEMINI_RETRY_BACKOFF_SECONDS=2.0
 ```
 
 `GEMINI_MODEL` is the primary model. `GEMINI_FALLBACK_MODELS` is a comma-separated list used when the primary model returns a retryable failure such as timeout, quota exhaustion, or temporary unavailability.
+The timeout, retry count, and backoff values can be tuned for live demos.
 
 ## Run
 
@@ -51,13 +55,27 @@ streamlit run app.py
 
 Open the local Streamlit URL, enter a research topic, and click **Run research workflow**.
 
-## Screenshots
+## Demo Flow
 
-Add screenshots here before submission:
+1. Start the app with `streamlit run app.py`.
+2. Enter a focused topic, such as `AI agents for scientific literature review`.
+3. Run the workflow and confirm the top metrics, workflow status, and model status are visible.
+4. Review the **Final Research Brief** synthesis.
+5. Download the Markdown or TXT report for submission notes.
 
-- Main workflow screen
-- Final Research Brief section
-- Downloaded report preview
+## Verification
+
+Run the automated test suite before presenting:
+
+```powershell
+python -m pytest
+```
+
+Optional syntax check:
+
+```powershell
+python -m compileall app.py agents utils
+```
 
 ## Project Structure
 
@@ -73,6 +91,13 @@ agents/critic_agent.py         Hypothesis critique
 agents/tests/                  Pytest coverage for MVP behavior
 utils/test_*.py                Demo scripts guarded by __main__
 ```
+
+## Polish Pass Summary
+
+- Final Research Brief: deterministic synthesis of key findings, research gaps, hypotheses, critiques, and next steps.
+- Model status indicator: active, fallback, unavailable, and cached states are surfaced in the workflow panel.
+- Encoding cleanup: UI status labels use ASCII-safe text for reliable Windows console and browser rendering.
+- Repository hygiene: local environment files, caches, bytecode, and generated demo output folders are ignored.
 
 ## Known Limitations
 
