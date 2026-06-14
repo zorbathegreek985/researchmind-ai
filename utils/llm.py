@@ -19,6 +19,12 @@ _GEMINI_CALL_COUNTS = {
     "critique": 0,
 }
 
+_GEMINI_RUNTIME_STATUS = {
+    "last_model": None,
+    "fallback_model_used": False,
+    "request_failed": False,
+}
+
 
 def reset_gemini_call_counts() -> dict:
     """Reset Gemini request counters for a new workflow run."""
@@ -29,6 +35,7 @@ def reset_gemini_call_counts() -> dict:
         "hypothesis": 0,
         "critique": 0,
     }
+    reset_gemini_runtime_status()
     return _GEMINI_CALL_COUNTS
 
 
@@ -45,6 +52,36 @@ def get_gemini_call_counts() -> dict:
     """Return current call counts and total for this workflow run."""
     total = sum(_GEMINI_CALL_COUNTS.values())
     return {**_GEMINI_CALL_COUNTS, "total": total}
+
+
+def reset_gemini_runtime_status() -> dict:
+    """Reset Gemini model health indicators for a new workflow run."""
+    global _GEMINI_RUNTIME_STATUS
+    _GEMINI_RUNTIME_STATUS = {
+        "last_model": None,
+        "fallback_model_used": False,
+        "request_failed": False,
+    }
+    return _GEMINI_RUNTIME_STATUS
+
+
+def record_gemini_model_success(model_name: str, primary_model: str) -> dict:
+    """Record which Gemini model successfully served a response."""
+    _GEMINI_RUNTIME_STATUS["last_model"] = model_name
+    if model_name != primary_model:
+        _GEMINI_RUNTIME_STATUS["fallback_model_used"] = True
+    return get_gemini_runtime_status()
+
+
+def record_gemini_model_failure() -> dict:
+    """Record that at least one Gemini request failed during this workflow."""
+    _GEMINI_RUNTIME_STATUS["request_failed"] = True
+    return get_gemini_runtime_status()
+
+
+def get_gemini_runtime_status() -> dict:
+    """Return current Gemini model health indicators."""
+    return dict(_GEMINI_RUNTIME_STATUS)
 
 
 def get_gemini_diagnostic() -> dict:
@@ -392,10 +429,12 @@ class LLMService:
                 try:
                     logger.info("Calling Gemini model", extra={"attempt": attempt + 1, "model": model_name})
                     result = self._request_once(prompt, model_name)
+                    record_gemini_model_success(model_name, self.model_name)
                     if model_name != self.model_name:
                         logger.info("Gemini fallback model succeeded", extra={"model": model_name})
                     return result
                 except Exception as exc:
+                    record_gemini_model_failure()
                     last_error = self._to_service_error(exc)
                     logger.warning(
                         "Gemini request failed",
